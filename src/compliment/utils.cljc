@@ -1,8 +1,8 @@
 (ns compliment.utils
   "Functions and utilities for source implementations."
-  (:import java.io.File java.nio.file.Files
-           (java.util.jar JarFile JarEntry)
-           java.util.function.Consumer))
+  #?(:clj (:import java.io.File java.nio.file.Files
+                   (java.util.jar JarFile JarEntry)
+                   java.util.function.Consumer)))
 
 (def ^:dynamic *extra-metadata*
   "Signals to downstream sources which additional information about completion
@@ -13,7 +13,8 @@
   "Tests if symbol matches the prefix when symbol is split into parts on
   separator."
   [prefix, ^String symbol, separator]
-  (when (or (.startsWith symbol prefix) (= (first prefix) (first symbol)))
+  (when (or (#?(:clj .startsWith :cljr .StartsWith) symbol prefix)
+            (= (first prefix) (first symbol)))
     (loop [pre (rest prefix), sym (rest symbol), skipping false]
       (cond (empty? pre) true
             (empty? sym) false
@@ -30,7 +31,8 @@
   is a separator. Unlike `fuzzy-matches?` requires separator characters to be
   present in prefix."
   [prefix, ^String symbol, separator?]
-  (when (or (.startsWith symbol prefix) (= (first prefix) (first symbol)))
+  (when (or (#?(:clj .startsWith :cljr .StartsWith) symbol prefix)
+            (= (first prefix) (first symbol)))
     (loop [pre prefix, sym symbol, skipping false]
       (cond (empty? pre) true
             (empty? sym) false
@@ -45,7 +47,9 @@
   if classname can't be resolved."
   [ns sym]
   (when-let [val (try (ns-resolve ns sym)
-                      (catch ClassNotFoundException ex nil))]
+                      (catch #?(:clj ClassNotFoundException
+                                :cljr Exception) ; clojure.lang.TypeNotFoundException?
+                                ex nil))]
     (when (class? val) val)))
 
 (defn resolve-namespace
@@ -84,6 +88,8 @@
   `cache-last-result` to recalculate."
   []
   (reset! primitive-cache {}))
+
+#?(:clj (do
 
 ;; Classpath inspection
 
@@ -217,3 +223,41 @@
                            (.endsWith file ".jar") (.endsWith file ".class")))]
         (if (.startsWith file File/separator)
           (.substring file 1) file)))))
+
+)
+
+   ;; XXX
+;;    :cljr (do
+
+;; ;; XXX: try (.GetTypes (.GetAssemblies AppDomain/CurrentDomain))
+;; ;;      may need to catch: ReflectionTypeLoadException
+;; (defn classes-in-assemblies
+;;   "Returns a map of many(?) classes that can be located. Key represent the root
+;;   namespace of the class, and value is a list of all classes for that namespace."
+;;   []
+;;   (let [classpath (classpath)]
+;;     (cache-last-result ::classes-on-classpath classpath
+;;       (->> (for [^String file (all-files-on-classpath classpath)
+;;                  :when (and (.endsWith file ".class") (not (.contains file "__"))
+;;                             (not (.contains file "$")))]
+;;              (.. (if (.startsWith file File/separator)
+;;                    (.substring file 1) file)
+;;                  (replace ".class" "") (replace File/separator ".")))
+;;            (group-by #(subs % 0 (max (.indexOf ^String % ".") 0)))))))
+
+;; ;; XXX: try looking in load path?
+;; (defn namespaces-on-loadpath
+;;   "Returns the list of all Clojure namespaces obtained by loadpath scanning."
+;;   []
+;;   (let [classpath (classpath)]
+;;     (cache-last-result ::namespaces-on-loadpath classpath
+;;       (set (for [^String file (all-files-on-classpath classpath)
+;;                  :when (and (.endsWith file ".clj")
+;;                             (not (.startsWith file "META-INF")))
+;;                  :let [[_ ^String nsname] (re-matches #"[^\w]?(.+)\.clj" file)]
+;;                  :when nsname]
+;;              (.. nsname (replace File/separator ".") (replace "_" "-")))))))           
+;;
+;;   )
+
+)

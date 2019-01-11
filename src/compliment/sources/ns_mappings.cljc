@@ -3,7 +3,8 @@
   (:require [compliment.sources :refer [defsource]]
             [compliment.utils :refer [fuzzy-matches? resolve-namespace
                                       *extra-metadata*]])
-  (:import java.io.StringWriter))
+  (:import #?(:clj java.io.StringWriter
+              :cljr System.IO.StringWriter)))
 
 (defn var-symbol?
   "Test if prefix resembles a var name."
@@ -20,8 +21,9 @@
   "Tries to get take apart scope namespace and prefix in prefixes like
   `scope/var`."
   [^String s, ns]
-  (let [[scope-name sym] (if (> (.indexOf s "/") -1)
-                           (.split s "/") ())
+  (let [[scope-name sym] (if (> (#?(:clj .indexOf :cljr .IndexOf) s "/") -1)
+                           #?(:clj (.split s "/")
+                              :cljr (.Split s (.ToCharArray "/"))) ())
         scope (when scope-name
                 (resolve-namespace (symbol scope-name) ns))
         prefix (if scope
@@ -84,11 +86,28 @@
             :let [var-name (name var-sym)
                   {:keys [arglists doc] :as var-meta} (meta var)]
             :when (dash-matches? prefix var-name)]
-        (if (= (type var) Class)
+        (if (= (type var) #?(:clj Class
+                             :cljr System.RuntimeType))
+          ;; XXX: :class and :package ok for clr?
           {:candidate var-name, :type :class,
-           :package (when-let [pkg (.getPackage ^Class var)]
-                      ;; Some classes don't have a package
-                      (.getName ^Package pkg))}
+           :package #?(:clj (when-let [pkg (.getPackage ^Class var)]
+                              ;; Some classes don't have a package
+                              (.getName ^Package pkg))
+                       ;; XXX: clr has namespaces, not packages
+                       :cljr
+                       (do
+                         ;;(println (str (type var) ":" var))
+                         (when-let [nspc
+                                    ;; can fail :(
+                                    (try
+                                      (.Namespace
+                                       ^System.RuntimeType var)
+                                      (catch Exception e
+                                        (let [the-type (str var)] ; icky?
+                                          (.Substring the-type 0
+                                                      (.LastIndexOf the-type
+                                                                    ".")))))]
+                                 nspc)))}
 
           (cond-> {:candidate (if scope
                                 (str scope-name "/" var-name)

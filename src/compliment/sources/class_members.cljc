@@ -67,7 +67,7 @@
 (defn class-member-symbol?
   "Tests if a symbol name looks like a non-static class member."
   [^String x]
-  (.startsWith x "."))
+  (#?(:clj .startsWith :cljr .StartsWith) x "."))
 
 (defn camel-case-matches?
   "Tests if prefix matches the member name following camel case rules.
@@ -104,7 +104,7 @@
       (for [[member-name members] (get-all-members ns klass)
             :when (if inparts?
                     (camel-case-matches? prefix member-name)
-                    (.startsWith ^String member-name prefix))
+                    (#?(:clj .startsWith :cljr .StartsWith) ^String member-name prefix))
             :when
             (or (not klass)
                 (some #(= klass (.getDeclaringClass ^Member %)) members))]
@@ -228,7 +228,8 @@
   "Returns a list of static member candidates."
   [^String prefix, ns context]
   (when (static-member-symbol? prefix)
-    (let [[cl-name member-prefix] (.split prefix "/")
+    (let [[cl-name member-prefix] #?(:clj (.split prefix "/")
+                                     :cljr (.Split prefix (.ToCharArray "/")))
           cl (resolve-class ns (symbol cl-name))
           member-prefix (or member-prefix "")]
       (when cl
@@ -236,7 +237,7 @@
           (for [[^String member-name members] (static-members cl)
                 :when  (if inparts?
                          (camel-case-matches? member-prefix member-name)
-                         (.startsWith member-name member-prefix))]
+                         (#?(:clj .startsWith :cljr .StartsWith) member-name member-prefix))]
             {:candidate (str cl-name "/" member-name)
              :type (if (instance? Method (first members))
                      :static-method :static-field)}))))))
@@ -244,7 +245,8 @@
 (defn resolve-static-member
   "Given a string representation of a static member returns Member object."
   [^String member-str ns]
-  (let [[cl-name member-name] (.split member-str "/")
+  (let [[cl-name member-name] #?(:clj (.split member-str "/")
+                                 :cljr (.Split member-str (.ToCharArray "/")))
         cl (resolve-class ns (symbol cl-name))]
     (when cl
       (update-static-cache cl)

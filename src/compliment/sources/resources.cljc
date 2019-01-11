@@ -23,7 +23,7 @@
   [prefix _ context]
   (when (inside-resource-call? context)
     (for [^String res (utils/project-resources)
-          :when (.startsWith res prefix)]
+          :when (#?(:clj .startsWith :cljr .StartsWith) res prefix)]
       {:candidate res
        :type :resource})))
 

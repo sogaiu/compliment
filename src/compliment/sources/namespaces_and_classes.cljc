@@ -2,8 +2,46 @@
   "Completion for namespace and class names."
   (:require [compliment.sources :refer [defsource]]
             [compliment.utils :refer [fuzzy-matches?] :as utils]
-            [compliment.sources.class-members :refer [classname-doc]])
-  (:import java.io.File))
+            ;; XXX: re-enable when done w/ class-members
+            ;;[compliment.sources.class-members :refer [classname-doc]]
+            )
+  #?(:clj (:import java.io.File)))
+
+;; XXX: adapt into class-member when done and remove from here
+;; XXX: PropertyInfo, others?
+(import '[System.Reflection
+          MethodInfo FieldInfo MemberInfo BindingFlags]))
+
+;; XXX: adapt into class-member when done and remove from here
+(defn static?
+  "Tests if class member is static."
+  #?@(:clj
+      ([^Member member]
+       (Modifier/isStatic (.getModifiers member)))
+
+      :cljr
+      ([member]
+       (.IsStatic member (enum-or BindingFlags/Public
+                                  BindingFlags/NonPublic
+                                  BindingFlags/DeclaredOnly
+                                  BindingFlags/Instance
+                                  BindingFlags/Static)))))
+
+;; XXX: adapt into class-member when done and remove from here
+(defn classname-doc [#?(:clj ^Class class
+                        :cljr ^System.RuntimeType class)]
+  (let [members (group-by static? 
+                          (concat (#?(:clj .getMethods :cljr .GetMethods) class)
+                                  (#?(:clj .getFields :cljr .GetFields) class)))
+        [static non-static] (for [flag [true false]]
+                              (->> (for [#?(:clj ^Member m :cljr m) (members flag)]
+                                     (#?(:clj .getName :cljr .FullName) m))
+                                   distinct
+                                   (interpose ", ")
+                                   join))]
+    (str (#?(:clj .getName :cljr .FullName) class) "\n\n"
+         " Non-static members:\n  " non-static "\n\n"
+         " Static members:\n  " static "\n")))
 
 (defn nscl-symbol?
   "Tests if prefix looks like a namespace or classname."
@@ -21,8 +59,8 @@
 (defn imported-classes
   "Returns names of all classes imported into a given namespace."
   [ns]
-  (for [[_ ^Class val] (ns-map ns) :when (class? val)]
-    (.getName val)))
+  (for [[_ #?(:clj ^Class val :cljr val)] (ns-map ns) :when (class? val)]
+    (#?(:clj .getName :cljr .FullName) val)))
 
 (defn all-classes-short-names
   "Returns a map where short classnames are matched with vectors with
@@ -54,7 +92,7 @@
   "Returns a list of package-qualified classnames given a short classname."
   [prefix]
   (reduce-kv (fn [l, ^String short-name, full-names]
-               (if (.startsWith short-name prefix)
+               (if (#?(:clj .startsWith :cljr .StartsWith) short-name prefix)
                  (concat l (map (fn [c] {:candidate c, :type :class})
                                 full-names))
                  l))
@@ -65,8 +103,8 @@
   "Returns simple classnames that match the `prefix` and belong to `pkg-name`."
   [prefix pkg-name]
   (reduce-kv (fn [l, ^String short-name, full-names]
-               (if (and (.startsWith short-name prefix)
-                        (some #(.startsWith ^String % pkg-name) full-names))
+               (if (and (#?(:clj .startsWith :cljr .StartsWith) short-name prefix)
+                        (some #(#?(:clj .startsWith :cljr .StartsWith) ^String % pkg-name) full-names))
                  (conj l {:candidate short-name, :type :class})
                  l))
              ()
@@ -76,7 +114,7 @@
   "Returns a list of namespace and classname completions."
   [^String prefix, ns context]
   (when (nscl-symbol? prefix)
-    (let [has-dot (> (.indexOf prefix ".") -1)
+    (let [has-dot (> (#?(:clj .indexOf :cljr .IndexOf) prefix ".") -1)
           import-ctx (analyze-import-context context)]
       ((comp distinct concat)
        (for [ns-str (concat (map (comp name ns-name) (all-ns))
@@ -92,18 +130,18 @@
        ;; Also have to do clever tricks to keep the performance high.
        (if has-dot
          (concat (for [[root-pkg classes] (utils/classes-on-classpath)
-                       :when (.startsWith prefix root-pkg)
+                       :when (#?(:clj .startsWith :cljr .StartsWith) prefix root-pkg)
                        ^String cl-str classes
-                       :when (.startsWith cl-str prefix)]
+                       :when (#?(:clj .startsWith :cljr .StartsWith) cl-str prefix)]
                    {:candidate cl-str, :type :class})
                  (for [ns-str (utils/namespaces-on-classpath)
                        :when (nscl-matches? prefix ns-str)]
                    {:candidate ns-str, :type :namespace}))
          (concat (for [[^String root-pkg _] (utils/classes-on-classpath)
-                       :when (.startsWith root-pkg prefix)]
+                       :when (#?(:clj .startsWith :cljr .StartsWith) root-pkg prefix)]
                    {:candidate (str root-pkg "."), :type :class})
                  (for [^String ns-str (utils/namespaces-on-classpath)
-                       :when (.startsWith ns-str prefix)]
+                       :when (#?(:clj .startsWith :cljr .StartsWith) ns-str prefix)]
                    {:candidate ns-str, :type :namespace})))))))
 
 (defn doc [ns-or-class-str curr-ns]

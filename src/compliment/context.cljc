@@ -66,7 +66,7 @@
                          (nth res 2)))
 
                  (string? ctx)
-                 (let [idx (.indexOf ^String ctx (name prefix-placeholder))]
+                 (let [idx (#?(:clj .indexOf :cljr .IndexOf) ^String ctx (name prefix-placeholder))]
                    (when (>= idx 0)
                      [{:idx idx :form ctx}]))
 

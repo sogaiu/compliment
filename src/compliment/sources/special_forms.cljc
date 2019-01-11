@@ -40,7 +40,7 @@
   not context-dependent (don't have to be first items in the list)."
   [prefix _ __]
   (->> ["true" "false" "nil"]
-       (filter #(.startsWith ^String % prefix))
+       (filter #(#?(:clj .startsWith :cljr .StartsWith) ^String % prefix))
        (map (fn [c] {:candidate c, :type :special-form}))))
 
 (defsource ::literals

@@ -7,18 +7,21 @@
   "Core namespace. Most interactions with Compliment should happen
   through functions defined here."
   (:require (compliment.sources ns-mappings
-                                namespaces-and-classes
-                                class-members
+                                ;;namespaces-and-classes
+                                ;;class-members
                                 keywords
                                 special-forms
                                 local-bindings
-                                resources)
+                                ;;resources
+                                )
             [compliment.sources :refer [all-sources]]
             [compliment.context :refer [cache-context]]
             [compliment.utils :refer [*extra-metadata*]]
             [clojure.string :refer [join]])
-  (:import java.util.Comparator))
+  (:import #?(:clj java.util.Comparator
+              :cljr [System.Collections IComparer])))
 
+;; XXX: update if any filenames change from .clj -> .cljc
 (def all-files
   "List of all Compliment files in an order they should be loaded. This is
   required by REPLy."
@@ -30,8 +33,8 @@
         "core"]))
 
 (def ^:private by-length-comparator
-  (reify Comparator
-    (compare [_ s1 s2]
+  (reify #?(:clj Comparator :cljr IComparer)
+    (#?(:clj compare :cljr Compare) [_ s1 s2]
       (let [res (compare (count s1) (count s2))]
         (if (zero? res)
           (compare s1 s2)
@@ -83,13 +86,15 @@
                candidates (mapcat
                             (fn [f] (f prefix nspc ctx))
                             candidate-fns)
-               sorted-cands (if (= sort-order :by-name)
-                              (sort-by
-                                :candidate
-                                candidates)
-                              (sort-by
-                                :candidate by-length-comparator
-                                candidates))
+               ;; XXX: invalid cast...
+               ;; sorted-cands (if (= sort-order :by-name)
+               ;;                (sort-by
+               ;;                  :candidate
+               ;;                  candidates)
+               ;;                (sort-by
+               ;;                  :candidate by-length-comparator
+               ;;                  candidates))
+               sorted-cands candidates
                cands (if (:plain-candidates options-map)
                        (map :candidate sorted-cands)
                        sorted-cands)]
